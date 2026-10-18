@@ -1,0 +1,11 @@
+/sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+  Content-Type: application/javascript; charset=utf-8
+  X-Content-Type-Options: nosniff
+  Content-Security-Policy: default-src 'self'; script-src 'self'; connect-src 'self'
+
+/manifest.webmanifest
+  Cache-Control: no-cache
+
+/*.html
+  Cache-Control: no-cache
