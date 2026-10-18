@@ -116,6 +116,7 @@
 - [x] Phase 6.5: Accessibility audit แก้ contrast, keyboard/dialog focus, route title และ loading landmarks; axe local/HTTPS 30 states และ paired mobile 71 checks ผ่าน
 - [x] Phase 6.5: Error monitoring บน D1 เดิม จำกัดจำนวน/อายุข้อมูล ไม่เก็บเนื้อหาส่วนตัว; tested auth, scope, concurrent caps, request ID และ failure fallback
 - [x] Phase 6.5: เพิ่ม mobile lab performance budget และตัด Motion ออกจากเส้นทางเริ่มต้น; ผลรอบส่งมอบดู `QA.md` และวิธีตรวจซ้ำดู `OPERATIONS.md`
+- [x] Phase 6.6: Quest/Savings ผ่าน mobile lab budget 4 วินาทีครบ 3 รอบต่อหน้าบน HTTPS; route splitting, Zod tree shaking และ state preload คง private/no-store, ledger และ Free tier เดิม ดูหลักฐานใน `QA.md`
 - [ ] ตรวจ VoiceOver/TalkBack และการใช้งานบน iPhone/Android เครื่องจริง
 - [x] ตรวจ dependency audit อีกครั้ง: production 0 advisories; dev transitive `braces` ยังไม่มี patched version ดู `SECURITY.md` SEV-001
 - [ ] อัปเดตสาย dev dependency `braces` เมื่อ upstream มี patched release ที่เข้ากันได้

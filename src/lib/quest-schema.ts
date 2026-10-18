@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 import { questSchema } from "./model";
 import { planningStateSchema } from "./planning-schema";
 import { journalStateSchema } from "./journal-schema";

@@ -401,3 +401,76 @@ test("non-API immutable asset responses remain untouched by request ID instrumen
   assert.equal(response.status, 302);
   assert.equal(response.headers.has("X-OLW-Request-ID"), false);
 });
+
+test("credential-free state reads reject at the edge; every credential and other route still reaches authorization", async () => {
+  const source = readFileSync("cloudflare/entry.mjs", "utf8");
+  const start = source.indexOf("const worker = {");
+  const end = source.indexOf("export default worker;", start);
+  assert.ok(start >= 0 && end > start);
+  const edge = runInNewContext(source.slice(start, end) + ";worker", {
+    URL,
+    Request,
+    Response,
+    Headers,
+    crypto,
+    backend: {
+      fetch: () => {
+        throw Error("Unexpected asset request");
+      },
+    },
+    recordServerError: () => {
+      throw Error("Unexpected transport failure");
+    },
+  }) as { fetch: (request: Request, env: unknown) => Promise<Response> };
+  let calls = 0;
+  let forwarded = new Headers();
+  const env = {
+    ACCOUNT_BACKEND: {
+      getByName: () => {
+        calls++;
+        return {
+          handleApi: async (input: { headers: [string, string][] }) => {
+            forwarded = new Headers(input.headers);
+            return {
+              status: 401,
+              statusText: "Unauthorized",
+              headers: [],
+              body: null,
+            };
+          },
+        };
+      },
+    },
+  };
+  const url =
+    "https://example.invalid/api/quests/state?planning=1&journal=1&pet=1";
+  const fast = await edge.fetch(
+    new Request(url, { headers: { "X-OLW-Request-ID": "untrusted" } }),
+    env,
+  );
+  assert.equal(fast.status, 401);
+  assert.deepEqual(await fast.json(), { error: "ต้องเข้าสู่ระบบ" });
+  assert.equal(fast.headers.get("Cache-Control"), "private, no-store");
+  assert.equal(fast.headers.get("X-Content-Type-Options"), "nosniff");
+  assert.match(fast.headers.get("X-OLW-Request-ID")!, /^[a-f0-9-]{36}$/);
+  assert.equal(calls, 0);
+  const credentials: Record<string, string>[] = [
+    { Cookie: "invalid=session" },
+    { Authorization: "Bearer invalid" },
+  ];
+  for (const headers of credentials) {
+    assert.equal(
+      (await edge.fetch(new Request(url, { headers }), env)).status,
+      401,
+    );
+    for (const [name, value] of Object.entries(headers))
+      assert.equal(forwarded.get(name), value);
+  }
+  assert.equal(calls, 2);
+  await edge.fetch(
+    new Request("https://example.invalid/api/account/context"),
+    env,
+  );
+  await edge.fetch(new Request(url, { method: "POST" }), env);
+  assert.equal(calls, 4);
+});

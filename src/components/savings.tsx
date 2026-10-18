@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { z } from "zod";
+import * as z from "zod";
 import { PiggyBank, ArrowUpRight, Pencil, RotateCcw } from "lucide-react";
 import { usePendingDeposit, usePlanning } from "@/lib/planning-store";
 import { goalSchema, type Goal } from "@/lib/model";

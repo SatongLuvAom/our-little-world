@@ -1,5 +1,65 @@
 # Our Little World — ผลการตรวจสอบ
 
+## Phase 6.6 — ลด LCP ของ Quest และ Savings
+
+ตรวจวันที่ 18 ตุลาคม 2026 (Asia/Bangkok) รุ่น HTTPS `7de9621e-3e9d-453b-9612-ef2ceda499a1`, Service Worker `0c6d00b0c0ce75c7c1f9` ใช้ Workers/D1/SQLite DO และ Cron เดิม ไม่มี migration, dependency, R2, Billing หรือแพ็กเกจเสียเงินเพิ่ม
+
+### ผลวัดก่อนและหลัง
+
+Lighthouse **13.5.0**, Edge headless, mobile simulated network/CPU 4×, cold browser cache/storage ตามค่าเริ่มต้น วัดทีละหน้าเมื่อไม่มี build/tests/cleanup ทำงาน เปรียบเทียบ 3 ครั้งต่อหน้าบน HTTPS origin เดียวกัน ไม่เปลี่ยน budget และไม่คัดเฉพาะรอบที่ดีที่สุด
+
+| หน้า | ก่อน: LCP ทั้ง 3 รอบ ms | หลัง: LCP ทั้ง 3 รอบ ms | median ก่อน → หลัง | ผล |
+| --- | --- | --- | --- | --- |
+| Quest | 4,265.84 / 4,577.63 / 4,111.90 | 3,645.59 / 3,475.27 / 3,660.48 | 4,265.84 → 3,645.59 ms (ลด 14.5%) | Passed 3/3 |
+| Savings | 4,984.82 / 5,088.26 / 5,100.10 | 3,848.60 / 3,643.98 / 3,504.77 | 5,088.26 → 3,643.98 ms (ลด 28.4%) | Passed 3/3 |
+
+| หน้า | Performance | Accessibility | TBT สูงสุด ms | CLS สูงสุด | transfer สูงสุด bytes |
+| --- | --- | --- | --- | --- | --- |
+| Quest | 89–90 | 100 | 111 | 0.00103 | 364,865 |
+| Savings | 87–90 | 100 | 135.5 | 0.00215 | 368,831 |
+
+`node scripts/check-mobile-budget.mjs output/lcp-preload-state-quests-{1,2,3}.json output/lcp-preload-state-savings-{1,2,3}.json` (ขยายแต่ละชื่อไฟล์ก่อนรันใน PowerShell) **Passed ทั้ง 6 reports** ตามงบ Performance ≥85, Accessibility 100, LCP ≤4,000 ms, TBT ≤200 ms, CLS ≤0.1, transfer ≤500,000 bytes
+
+### การแก้ที่คงไว้
+
+- แยก Server page ของ `/quests`, `/savings`, `/explore`, `/us` จาก `[section]` ที่อ้าง Client Components ทั้งสี่หน้า คง URL, metadata และ rewards query เดิม
+- เปลี่ยนเฉพาะรูปแบบ import ของ Zod ใน schema ที่อยู่บน critical path และ Savings ให้ Turbopack ตัด exports ที่ไม่ใช้ โดยไม่แก้ validation; initial scripts gzip จาก 368,294 bytes ทั้งสองหน้า เหลือ Quest **286,153** / Savings **289,269** bytes ลด 82,141 / 79,025 bytes รวมผลแยก route
+- ปิด automatic prefetch ของลิงก์ login/pairing ใน QuestStatus และเริ่ม GET state เดิมด้วย `preload as=fetch` ระหว่างโหลด JavaScript ใช้ credentials mode แบบ same-origin, server `private, no-store` เดิม ไม่มีการ cache ข้อมูลส่วนตัวใน Service Worker หรือ HTML และไม่มี early Demo seed
+- อ่าน error response body ให้จบก่อนตรวจ version guard; trace เดิมทิ้ง body จน timeout 15 วินาที หลังแก้จบในช่วงประมาณ 0.4–1.3 วินาที ปฏิเสธ GET state ที่ไม่มีทั้ง Cookie/Authorization ที่ edge ได้ทันที ลด 1 DO RPC ต่อ anonymous read; ทุกคำขอที่มี credentials ยังคงผ่าน backend authorization เดิม ไม่มีการเปลี่ยน SQL/ledger/receipt
+
+### บันทึกการทดลอง
+
+ผล pilot เป็นรายรอบ เว้นแต่ระบุ median ไม่ใช้แทน 6 final reports ข้างต้น
+
+| ทดลอง | ผลที่สังเกต | ข้อสรุป |
+| --- | --- | --- |
+| แยก route | Savings 4,414.64 ms; scripts ลด Quest 31,347 / Savings 28,229 gzip bytes | คงไว้: งานที่ไม่เกี่ยวกับหน้าหายไปจริง แต่ยังไม่พอผ่าน LCP |
+| preload font 2 ไฟล์ / ชะลอ SW ติดตั้งครั้งแรก | Savings 4,212.02 / 4,307.21 ms | คืนโค้ด: ต่างอยู่ในความแปรปรวน ไม่เปลี่ยน font/SW timing สุดท้าย |
+| ปิด Auth link prefetch | median Quest 3,799.15 / Savings 4,136.88 ms; ยังไม่ผ่านทุก report | คงไว้เพื่อตัด Auth downloads ที่ยังไม่ต้องใช้ ไม่อ้างว่าจุดนี้ปิดงานได้เอง |
+| lazy EditorForm | median Quest 4,018.34 / Savings 4,017.96 ms | คืนโค้ด: ไม่มีผลดีที่สม่ำเสมอ; คงฟอร์มและ validation เดิม |
+| preload font 6 ไฟล์ | median Quest 4,058.31 / Savings 4,322.52 ms | คืนโค้ด: ยังเกินงบและเพิ่มการแข่งขันโหลด |
+| สลับลำดับ provider | Quest 3,946.14 / Savings 5,610 ms | คืนโค้ด: Savings แย่ลง |
+| drain error body / edge fast deny | pilot LCP ยังไม่ผ่านทั้งสองหน้า; body จบก่อน timeout / ตัด 1 RPC ที่ไม่จำเป็น | คงเฉพาะงาน I/O/RPC ที่ลดได้จริง ไม่ให้เครดิต LCP จาก pilot นี้ |
+| Static public shell + header | Quest 4,785.60 / Savings 4,229.21 ms | คืนโค้ดทั้งหมด: ไม่คุ้มความซับซ้อน; WorldProvider ยังคง guard เดิม |
+| Zod namespace imports | Quest 3,657.08 / Savings 4,751.90 ms; scripts ลดเพิ่มประมาณ 51 KB | คงไว้จาก byte reduction ที่ชัดเจน แต่ยังไม่ปิดงานจนเพิ่ม state preload |
+| state preload พร้อม changes ที่คงไว้ | LCP 3.48–3.85 วินาทีทั้ง 6 รอบ; initial state request เพียงครั้งเดียว | คงไว้: final budget ผ่านครบ |
+
+### การตรวจส่งมอบ
+
+- `npm test` — **Passed 106 tests** รวม edge guard ที่ใช้ worker object จริง: no credentials ไม่เรียก RPC, Cookie/Bearer ทุกชนิดและ route/method อื่นยังส่งผ่าน authorization พร้อม request ID/security headers
+- `npm run lint` / `npm run typecheck` / `npm run build` / remote schema gate + deploy — **Passed**
+- `scripts/browser-state-preload.cjs` HTTPS — **Passed 13 checks**: ไม่แสดง Demo/records ระหว่างรอ auth, initial request หนึ่งครั้ง, no-store read และ focus refresh เรียก server ใหม่, rewards deep link และไม่มี hydration/runtime error
+- `scripts/browser-pwa.cjs` HTTPS — **Passed 44 checks**, virtual Passkey 4 บัญชี/2 คู่: concurrent completion รับหัวใจครั้งเดียว, reward/deposit/item ที่ commit แล้วคำตอบขาดหายและเปิดแอปใหม่ไม่หักหรือบวกซ้ำ, offline ไม่ replay POST, API ไม่อยู่ใน cache และอีกคู่ไม่เห็นข้อมูล
+- `scripts/browser-accessibility.cjs` HTTPS — **Passed 30 page/dialog states**, 0 violations/overflow, คืน focus 9 จุด; axe ยังมี incomplete/manual checks ตาม artifact ไม่อ้าง WCAG conformance ครบทุกข้อ
+- `scripts/browser-smoke.cjs` HTTPS — **Passed 23 checks** รวม validation, Quest/Rewards/Savings CRUD และ persistence; reset Demo กลับ seed หลังตรวจ
+- PWA migration จาก build เดิม `d46cb70643ada90ccf1b` ไป trial split-only — **Passed 9 checks** รวม old open offline tabs, pending receipt, explicit update และ open-form guard เป็นหลักฐาน migration ของ trial ก่อน final bundle ไม่ใช่การอ้างว่าได้รัน upgrade suite ซ้ำกับ final build
+- ล้าง QA exact cohort `mvdl7icp` แล้ว 4 บัญชี/2 คู่ ตรวจ savings/heart/feed ledger ก่อนลบและ read-back เหลือ 0; ปิด browser/preview ของรอบนี้แล้ว ไม่แก้ข้อมูลผู้ใช้จริง
+- HTTPS probes — **Passed**: `/sw.js` HTTP 200, no-store/must-revalidate และ SHA-256 ตรง `out/sw.js`; private-source probes 6 paths ตอบ 404; state read แบบไม่มี credentials, Cookie ปลอม และ Bearer ปลอมตอบ 401/no-store พร้อม request ID
+
+Artifacts ในเครื่อง (ignored): `lcp-before-{quests,savings}-{1,2,3}.json`, `lcp-preload-state-{quests,savings}-{1,2,3}.json`, traces/devtools logs, `lcp-delivery-summary.json` และ `lcp-browser-*.txt` ไฟล์ชื่อ `lcp-final-*` เป็น prototype lazy-form ที่คืนโค้ดแล้ว ไม่ใช่ผลส่งมอบ
+
+ผลเป็น mobile lab บน Edge ไม่ใช่ field p75/INP หรือการรับประกันทุกเครือข่าย ไม่ได้ตรวจ Safari/iPhone/Android เครื่องจริงเพิ่ม งบ 4 วินาทีไม่เท่ากับเกณฑ์ LCP ระดับดี ≤2.5 วินาที ไม่เพิ่ม RUM หรือบริการคิดเงินเพื่อวัดผล
+
 ## Phase 6.5 — Accessibility, ประสิทธิภาพมือถือ และ error monitoring
 
 ตรวจวันที่ 16–17 ตุลาคม 2026 (Asia/Bangkok) เผยแพร่สุดท้ายวันที่ 17 ตุลาคม รุ่น `42a20153-a899-497f-9f4a-718cf10d1f5e` และ Service Worker `d46cb70643ada90ccf1b` ใช้ Workers/D1/SQLite DO เดิม เพิ่มเฉพาะตารางตัวนับที่จำกัดจำนวนและ version metadata ไม่มี dependency หรือบริการเสียเงินเพิ่ม ไม่แก้ Billing/R2/Cron เดิมทุก 15 นาที

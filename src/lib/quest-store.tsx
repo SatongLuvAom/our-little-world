@@ -116,6 +116,8 @@ export function QuestProvider({ children }: { children: ReactNode }) {
             signal: AbortSignal.timeout(15000),
           },
         );
+        // Finish unused error bodies; leaving them unread keeps the fetch open until its timeout.
+        if (!response.ok) await response.arrayBuffer();
         if (!mounted.current || current !== version.current) return;
         if (response.status === 401) {
           setState(null);

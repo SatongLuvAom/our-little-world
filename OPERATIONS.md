@@ -54,13 +54,15 @@ Lighthouse ใช้ mobile simulated network/CPU 4× วัดตอนเค�
 
 ```powershell
 $env:CHROME_PATH='C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'
-npx --yes --package lighthouse lighthouse https://our-little-world.supawat-you.workers.dev/ --port=9228 --only-categories=performance,accessibility --output=json --output-path=output/mobile-home-remote.json --chrome-flags='--headless=new --no-sandbox' --quiet
+npx --yes --package lighthouse@13.5.0 lighthouse https://our-little-world.supawat-you.workers.dev/ --port=9228 --only-categories=performance,accessibility --output=json --output-path=output/mobile-home-remote.json --chrome-flags='--headless=new --no-sandbox' --quiet
 node scripts/check-mobile-budget.mjs output/mobile-home-remote.json
 ```
 
 Budget: Performance ≥85, Accessibility 100, LCP ≤4,000 ms, TBT ≤200 ms, CLS ≤0.1, transfer ≤500,000 bytes ทั้งหมดเป็น lab budget เป้าหมาย LCP ระดับดีของ Core Web Vitals คือ ≤2,500 ms จึงไม่เรียกผล 2.5–4 วินาทีว่าอยู่ระดับดี TBT/เวลาปฏิสัมพันธ์ในห้องทดสอบไม่ใช่ INP ของผู้ใช้จริง รุ่นนี้ไม่เก็บ RUM
 
-รอบส่งมอบ Home ผ่าน budget; Quest และ Savings ยังไม่ผ่าน LCP โดย Savings Performance 84 ต่ำกว่าเกณฑ์ 85 ด้วย ผลล้มเหลวยังคงแสดงตามจริงใน `QA.md` และ JSON ไม่เปลี่ยน threshold หรือใช้รอบที่ดีที่สุดแทนทุกผล
+Phase 6.6 วัด Quest/Savings บน HTTPS 3 รอบต่อหน้า ผ่าน budget ทั้ง 6 reports: median LCP 3,645.59 / 3,643.98 ms และสูงสุด 3,660.48 / 3,848.60 ms ผล Phase 6.5 ที่ล้มเหลวยังเก็บเป็นประวัติใน `QA.md` การตรวจซ้ำควรใช้ Lighthouse รุ่นเดียวกัน วัดตอนเครื่องว่างและตรวจทุก report ไม่เลือกเฉพาะรอบที่ดีที่สุด ส่วน Home ไม่ได้วัดใหม่ในรอบนี้
+
+`scripts/browser-state-preload.cjs` ตรวจการใช้ initial state request เพียงครั้งเดียวและการอ่านข้อมูลสดครั้งถัดไป พร้อมป้องกัน Demo ปรากฏก่อนรู้ผล authorization ใช้คำสั่ง `playwright-cli run-code --filename=scripts/browser-state-preload.cjs` ใน session QA เดียวกับด้านบน API ยังคง `private, no-store` และห้ามเพิ่ม API เข้า precache
 
 axe ไม่พิสูจน์ WCAG conformance ทุกข้อ ต้องตรวจ incomplete/manual checks โดยเฉพาะ emoji/SVG/gradient ยังไม่ได้ทดสอบ VoiceOver/TalkBack, Safari iOS, Android hardware หรือ system/browser zoom จริง ผล 200% เป็นการขยาย computed font ของเนื้อหาหลักใน browser test
 

@@ -424,7 +424,7 @@ export function QuestStatus({
     return (
       <p className="notice">
         {label} ตัวอย่างในเครื่อง ·{" "}
-        <Link href="/login" className="text-link">
+        <Link prefetch={false} href="/login" className="text-link">
           เข้าสู่ระบบเพื่อใช้ร่วมกัน
         </Link>
       </p>
@@ -433,7 +433,7 @@ export function QuestStatus({
     return (
       <p className="notice">
         สร้างคู่หรือรับคำเชิญก่อนเริ่มใช้ข้อมูลร่วมกัน ·{" "}
-        <Link href="/pairing" className="text-link">
+        <Link prefetch={false} href="/pairing" className="text-link">
           ไปจับคู่บัญชี
         </Link>
       </p>
@@ -454,7 +454,7 @@ export function QuestStatus({
         โหลดข้อมูลล่าสุด
       </Button>
       {error && (
-        <Link href="/login" className="text-link">
+        <Link prefetch={false} href="/login" className="text-link">
           เข้าสู่ระบบอีกครั้ง
         </Link>
       )}

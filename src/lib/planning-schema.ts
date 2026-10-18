@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 import { dateSchema, eventSchema, goalSchema, wishSchema } from "./model";
 export const centsSchema = z.number().int().min(0).max(1000000000);
 export const bahtSchema = z

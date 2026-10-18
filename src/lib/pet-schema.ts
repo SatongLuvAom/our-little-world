@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 export const feedPetSchema = z.object({ request_id: z.uuid() }).strict();
 export const purchasePetSchema = z
   .object({ item_id: z.string().min(1).max(40), request_id: z.uuid() })

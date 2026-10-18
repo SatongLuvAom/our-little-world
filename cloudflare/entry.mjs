@@ -72,6 +72,24 @@ const worker = {
     const requestId = crypto.randomUUID(),
       forwarded = new Headers(request.headers);
     forwarded.set("X-OLW-Request-ID", requestId);
+    // A credential-free state read cannot authenticate; avoid waking an auth Object just to reject it.
+    if (
+      path === "/api/quests/state" &&
+      request.method === "GET" &&
+      !request.headers.has("Cookie") &&
+      !request.headers.has("Authorization")
+    )
+      return Response.json(
+        { error: "ต้องเข้าสู่ระบบ" },
+        {
+          status: 401,
+          headers: {
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+            "X-OLW-Request-ID": requestId,
+          },
+        },
+      );
     // Coordinate each edge-authenticated client separately; D1 still enforces global rate limits.
     // No identity/session is cached in the Object and no public header can select another user.
     const ip =

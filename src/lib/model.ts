@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 export const person = z.enum(["เรา", "เธอ", "ด้วยกัน"]);
 const id = z.string().min(1);
 const title = z
