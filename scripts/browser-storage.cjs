@@ -1,9 +1,13 @@
 /* eslint-disable @typescript-eslint/no-unused-expressions -- Playwright CLI evaluates this function expression. */
 async (page) => {
+  const origin = new URL(page.url()).origin;
   const key = "our-little-world:v1";
-  await page.goto("http://127.0.0.1:3017/quests");
+  await page.goto(origin + "/quests");
+  await page.locator(".loading-screen").waitFor({ state: "hidden" });
   await page.locator("main h1").waitFor();
+  await page.getByText("กำลังตรวจสอบข้อมูลของบัญชี…", { exact: true }).waitFor({ state: "hidden" });
   const before = await page.evaluate((k) => localStorage.getItem(k), key);
+  const heartsBefore = await page.locator(".summary-strip strong").first().textContent();
   await page.evaluate(() => {
     Storage.prototype.setItem = function () {
       throw new DOMException("Test quota exceeded", "QuotaExceededError");
@@ -15,8 +19,11 @@ async (page) => {
       exact: true,
     })
     .click();
+  await page.getByText(/พื้นที่ในเครื่องเต็ม/).waitFor();
   const after = await page.evaluate((k) => localStorage.getItem(k), key);
   if (before !== after) throw new Error("Quota failure mutated persisted data");
+  if (await page.locator(".summary-strip strong").first().textContent() !== heartsBefore)
+    throw new Error("Quota failure awarded visible hearts");
   if (
     await page
       .getByRole("button", {
@@ -45,7 +52,7 @@ async (page) => {
     "{broken-demo-json"
   )
     throw new Error("Corrupt data was overwritten");
-  await page.goto("http://127.0.0.1:3017/us");
+  await page.goto(origin + "/us");
   await page.getByRole("button", { name: "ล้างข้อมูล", exact: true }).click();
   await page
     .getByRole("button", { name: "ยืนยันล้างข้อมูล", exact: true })
@@ -55,7 +62,7 @@ async (page) => {
   );
   if (restored.version !== 1 || restored.completions.length)
     throw new Error("Recovery reset failed");
-  await page.goto("http://127.0.0.1:3017/");
+  await page.goto(origin + "/");
   return {
     passed: [
       "quota failure keeps stored data",

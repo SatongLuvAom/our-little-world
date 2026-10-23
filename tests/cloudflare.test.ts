@@ -243,6 +243,77 @@ test(
       },
     );
     await t.test(
+      "expired D1 sessions cannot read or mutate any API family while a partner remains signed in",
+      async () => {
+        const user = await internal.createUser({
+          name: "Expiry fixture",
+          email: "expiry_fixture@accounts.our-little-world.invalid",
+          username: "expiry_fixture",
+          emailVerified: false,
+        }, { method: "test-fixture" });
+        const session = await internal.createSession(user.id);
+        const cookie = (await serializeSignedCookie(
+          "olw.session_token", session.token, env.BETTER_AUTH_SECRET,
+          { path: "/", httpOnly: true, sameSite: "lax" },
+        )).split(";")[0];
+        const couple = await createCouple(db, user.id, questDay());
+        const partner = await internal.createUser({
+          name: "Expiry partner",
+          email: "expiry_partner@accounts.our-little-world.invalid",
+          username: "expiry_partner",
+          emailVerified: false,
+        }, { method: "test-fixture" });
+        const partnerSession = await internal.createSession(partner.id);
+        const partnerCookie = (await serializeSignedCookie(
+          "olw.session_token", partnerSession.token, env.BETTER_AUTH_SECRET,
+          { path: "/", httpOnly: true, sameSite: "lax" },
+        )).split(";")[0];
+        await acceptInvitation(db, partner.id, (await createInvitation(db, user.id)).token);
+        await db.prepare("UPDATE auth_sessions SET expiresAt = ? WHERE id = ?")
+          .bind(Date.now() - 1000, session.id).run();
+        const reads = ["account/context", "quests/state", "planning/state", "journal/state", "pet/state", "push/state", "diagnostics/state"];
+        const writes = ["account/profile", "quests/complete", "planning/deposit", "journal/save", "pet/feed", "backup/start", "push/test", "diagnostics/report"];
+        for (const [method, paths] of [["GET", reads], ["POST", writes]] as const) {
+          for (const path of paths) {
+            const response = await handleRequest(new Request(env.APP_URL + "/api/" + path, {
+              method,
+              headers: { Cookie: cookie, Origin: env.APP_URL, "Content-Type": "application/json" },
+              ...(method === "POST" ? { body: "{}" } : {}),
+            }), env);
+            assert.equal(response.status, 401, method + " " + path);
+            assert.match(response.headers.get("Cache-Control")!, /no-store/);
+            assert.ok(!(await response.text()).includes(user.id));
+          }
+        }
+        assert.equal(await createAuth(env).api.getSession({ headers: new Headers({ Cookie: partnerCookie }) }).then(s => s?.user.id), partner.id);
+        assert.equal((await getAccountContext(db, partner.id)).couple?.id, couple);
+        for (const table of ["heart_entries", "savings_entries", "pet_feeds"])
+          assert.equal((await db.prepare(`SELECT count(*) AS n FROM ${table} WHERE couple_id = ?`).bind(couple).first<{ n: number }>())?.n, 0);
+      },
+    );
+    await t.test(
+      "expired WebAuthn challenges reject verification and cannot create sessions",
+      async () => {
+        const options = await request("/passkey/generate-authenticate-options", undefined, undefined, env.APP_URL, "198.51.100.240");
+        assert.equal(options.status, 200);
+        const { challenge } = await options.json() as { challenge: string };
+        const cookie = options.headers.getSetCookie().map(c => c.split(";")[0]).join("; ");
+        assert.ok(cookie);
+        const expired = await db.prepare("UPDATE auth_verifications SET expiresAt = ? WHERE json_extract(value, '$.expectedChallenge') = ? RETURNING id")
+          .bind(Date.now() - 1000, challenge).all();
+        assert.equal(expired.results.length, 1);
+        const before = await db.prepare("SELECT count(*) AS n FROM auth_sessions").first<{ n: number }>();
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const response = await request("/passkey/verify-authentication", {
+            response: { id: "expired-fixture", rawId: "expired-fixture", type: "public-key", response: { clientDataJSON: "AA", authenticatorData: "AA", signature: "AA" } },
+          }, cookie, env.APP_URL, "198.51.100.240");
+          assert.equal(response.status, 400);
+          assert.equal((await response.json() as { code: string }).code, "CHALLENGE_NOT_FOUND");
+        }
+        assert.equal((await db.prepare("SELECT count(*) AS n FROM auth_sessions").first<{ n: number }>())?.n, before?.n);
+      },
+    );
+    await t.test(
       "auth rejects cross-origin requests, missing origins, and unexposed writes",
       async () => {
         for (const origin of ["https://evil.example", "null", ""])

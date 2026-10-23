@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-expressions -- Playwright CLI evaluates this function expression. */
 async (page) => {
+  const origin = new URL(page.url()).origin;
   const routes = [
     "/",
     "/quests",
@@ -14,15 +15,19 @@ async (page) => {
     "/explore/mood",
     "/explore/roulette",
     "/explore/pet",
+    "/login",
+    "/register",
   ];
   const results = [];
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  for (const width of [375, 390, 1440]) {
+  for (const width of [320, 375, 390, 430, 768, 1024]) {
     await page.setViewportSize({ width, height: width > 500 ? 1000 : 844 });
     for (const route of routes) {
-      const response = await page.goto("http://127.0.0.1:3017" + route);
+      const response = await page.goto(origin + route);
+      await page.locator(".loading-screen").waitFor({ state: "hidden" });
       await page.locator("main h1").waitFor();
+      await page.getByText("กำลังตรวจสอบข้อมูลของบัญชี…", { exact: true }).waitFor({ state: "hidden" });
       if (response.status() !== 200)
         throw new Error(`${route} returned ${response.status()}`);
       const bounds = await page.evaluate(() => ({
@@ -44,7 +49,7 @@ async (page) => {
     }
   }
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("http://127.0.0.1:3017");
+  await page.goto(origin);
   await page.locator(".cat").waitFor();
   const duration = await page
     .locator(".cat")
@@ -53,14 +58,14 @@ async (page) => {
     throw new Error(`Reduced motion failed: ${duration}`);
   await page.emulateMedia({ reducedMotion: "no-preference" });
   const manifestResponse = await page.request.get(
-    "http://127.0.0.1:3017/manifest.webmanifest",
+    origin + "/manifest.webmanifest",
   );
   const manifest = await manifestResponse.json();
   if (manifest.display !== "standalone" || manifest.icons.length < 3)
     throw new Error("Invalid install manifest");
   for (const icon of manifest.icons)
     if (
-      (await page.request.get("http://127.0.0.1:3017" + icon.src)).status() !==
+      (await page.request.get(origin + icon.src)).status() !==
       200
     )
       throw new Error(`Missing icon ${icon.src}`);
