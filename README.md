@@ -8,7 +8,7 @@ Phase 6.5 เพิ่ม Accessibility, งบประสิทธิภาพ
 
 ผล Phase 6.6 วันที่ 18 ต.ค. 2026 เคยผ่าน LCP 4 วินาทีครบ 3 รอบต่อหน้าบน HTTPS โดยแยก route, ลด Zod exports และเริ่มอ่านบัญชีระหว่างโหลด JavaScript ผลตรวจ Production วันที่ 23 ต.ค. พบ Savings เกินงบหนึ่งรอบ จึงไม่ใช้ผลเดิมแทนสถานะล่าสุด
 
-สถานะ 24 ต.ค. 2026: candidate อัปเดต Next/ESLint เป็น 16.4.3 และ dependency audit ผ่าน 0 vulnerabilities แต่ **ยังไม่ปิดงาน performance**: local Savings LCP ผ่าน 3/3 ขณะที่ TBT เกินงบหนึ่งรอบ การทดลองที่ไม่ช่วยถูกคืนโค้ดทั้งหมด ยังไม่ Deploy ไม่เปลี่ยน Cloudflare Free tier หรือเพิ่มบริการเสียเงิน ดูหลักฐานใน [QA.md](QA.md) และ [รายงาน Phase 6.1](docs/PHASE_6_1_READINESS_REPORT.md)
+สถานะ 24 ต.ค. 2026: หลัง dependency checkpoint `f5e4a6a` เพิ่มการโหลด EditorForm เมื่อเปิดใช้ พร้อม loading/error boundary เพื่อลดงาน JavaScript ตอนเริ่มหน้า **Savings ผ่านงบ mobile local ครบ 3/3 รอบ**: LCP 3.32–3.34 วินาที และ TBT 127.5–184 ms แต่ Quest ยังเกิน TBT หนึ่งรอบ ทำให้ aggregate 6 reports ยัง FAIL ไม่อ้างว่าลด LCP บน Production สำเร็จ และ readiness ยัง **CONDITIONAL** การอัปเดต Next/ESLint 16.4.3 และ dependency audit 0 จาก checkpoint เดิมยังคงไว้ ยังไม่ Deploy ไม่เพิ่มค่าใช้จ่าย และ iPhone/Android จริงยัง 77 กรณี NOT TESTED ดูผลและประวัติ trials ใน [QA.md](QA.md) และ [รายงาน Phase 6.1](docs/PHASE_6_1_READINESS_REPORT.md)
 
 ## เริ่มใช้งาน
 

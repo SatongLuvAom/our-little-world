@@ -1,19 +1,63 @@
 "use client";
-import { useId, useState } from "react";
-import {
-  useForm,
-  type Resolver,
-  type FieldValues,
-  type DefaultValues,
-  type Path,
-} from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
+import { Component, lazy, Suspense, useState, useSyncExternalStore } from "react";
+import type { FieldValues, DefaultValues } from "react-hook-form";
+import type { z } from "zod";
 import { Plus, Sparkles, Heart, Trash2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Sheet } from "./ui/dialog";
 import { useWorld } from "@/lib/world-store";
 import { useJournal } from "@/lib/journal-store";
+import { reportClientError } from "@/lib/error-reporting";
+import {
+  beginAppUpdate,
+  isAppBusy,
+  isOnline,
+  serverOnline,
+  subscribeBusy,
+  subscribeConnection,
+} from "@/lib/client-safety";
+const EditorForm = lazy(() => import("./editor-form")) as typeof import("./editor-form").default;
+
+function FormLoadFailure() {
+  const online = useSyncExternalStore(subscribeConnection, isOnline, serverOnline);
+  const busy = useSyncExternalStore(subscribeBusy, isAppBusy, () => false);
+  return (
+    <div role="alert" className="error-banner">
+      <p>เปิดแบบฟอร์มไม่สำเร็จ</p>
+      <p className="muted text-sm">
+        {!online
+          ? "เชื่อมต่ออินเทอร์เน็ตก่อนโหลดหน้าใหม่"
+          : busy
+            ? "รอให้การบันทึกที่กำลังทำอยู่เสร็จก่อนโหลดหน้าใหม่"
+            : "ข้อมูลที่ยังไม่ได้บันทึกอาจต้องกรอกอีกครั้ง"}
+      </p>
+      <Button
+        disabled={!online || busy}
+        onClick={() => {
+          if (beginAppUpdate()) window.location.reload();
+        }}
+      >
+        โหลดหน้าใหม่
+      </Button>
+    </div>
+  );
+}
+
+class EditorFormBoundary extends Component<
+  { children: React.ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch() {
+    reportClientError("render");
+  }
+  render() {
+    return this.state.failed ? <FormLoadFailure /> : this.props.children;
+  }
+}
 export function PageHeading({
   eyebrow,
   title,
@@ -137,91 +181,21 @@ export function Editor<T extends FieldValues>({
         description={description}
       >
         {open && (
-          <EditorForm
-            schema={schema}
-            values={values}
-            fields={fields}
-            onSave={async (data) => {
-              if (await onSave(data)) setOpen(false);
-            }}
-          />
+          <EditorFormBoundary>
+            <Suspense fallback={<p role="status" className="muted text-sm">กำลังเปิดแบบฟอร์ม…</p>}>
+              <EditorForm
+                schema={schema}
+                values={values}
+                fields={fields}
+                onSave={async (data) => {
+                  if (await onSave(data)) setOpen(false);
+                }}
+              />
+            </Suspense>
+          </EditorFormBoundary>
         )}
       </Sheet>
     </>
-  );
-}
-function EditorForm<T extends FieldValues>({
-  schema,
-  values,
-  fields,
-  onSave,
-}: {
-  schema: z.ZodType<T>;
-  values: DefaultValues<T>;
-  fields: Field[];
-  onSave: (data: T) => void | Promise<void>;
-}) {
-  const uid = useId();
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useForm<T>({
-    resolver: zodResolver(schema as never) as Resolver<T>,
-    defaultValues: values,
-  });
-  return (
-    <form onSubmit={handleSubmit(onSave)} className="editor-form" noValidate>
-      {fields.map((field) => {
-        const error = errors[field.name];
-        const props = {
-          ...register(field.name as Path<T>, {
-            valueAsNumber: field.type === "number",
-          }),
-          id: `${uid}-${field.name}`,
-          "aria-invalid": !!error,
-          "aria-describedby": error ? `${uid}-${field.name}-error` : undefined,
-        };
-        return (
-          <div className="form-field" key={field.name}>
-            <label htmlFor={props.id}>{field.label}</label>
-            {field.type === "textarea" ? (
-              <textarea {...props} rows={4} maxLength={5000} />
-            ) : field.type === "select" ? (
-              <select {...props}>
-                {field.options?.map((o) => (
-                  <option
-                    key={typeof o === "string" ? o : o.value}
-                    value={typeof o === "string" ? o : o.value}
-                  >
-                    {typeof o === "string" ? o : o.label}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                {...props}
-                type={field.type || "text"}
-                min={field.min}
-                max={field.max}
-                step={field.step}
-                maxLength={
-                  field.type === "text" || !field.type ? 120 : undefined
-                }
-              />
-            )}
-            {error && (
-              <p className="field-error" id={`${uid}-${field.name}-error`}>
-                {String(error.message)}
-              </p>
-            )}
-          </div>
-        );
-      })}
-      <Button type="submit" disabled={isSubmitting} className="full-width">
-        บันทึก
-      </Button>
-    </form>
   );
 }
 export function DeleteButton({

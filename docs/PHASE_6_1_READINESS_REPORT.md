@@ -1,6 +1,28 @@
 # Phase 6.1 — Mobile UAT & Production Readiness Report
 
-## Checkpoint 24 ตุลาคม 2026 — Dependency remediation / Savings performance
+## Checkpoint 24 ตุลาคม 2026 — Savings TBT follow-up หลัง `f5e4a6a`
+
+สถานะ readiness ยัง **CONDITIONAL**: candidate รอบนี้ผ่าน **Savings local mobile budget ครบ 3/3 reports** แต่ guard รวม Quest/Savings ยัง FAIL จาก Quest TBT หนึ่งรอบ และยังไม่ Deploy จึงยังไม่รับรอง Production LCP หรือเครื่องจริง รายละเอียดและประวัติผล FAIL ก่อนแก้อยู่ใน [QA.md](../QA.md)
+
+- แยก shared `EditorForm` ให้โหลดเมื่อผู้ใช้เปิด editor เพื่อลด React Hook Form/resolver บน startup critical path โดยคง schema, validation, fields และ onSave เดิม เพิ่ม loading UI และ error boundary เฉพาะ editor; reload เมื่อ online/ไม่มี write ค้าง รักษา pending receipt และไม่ส่ง financial mutation อัตโนมัติ
+- คง Next/ESLint `16.4.3` และ dependency audit 0 จาก `f5e4a6a`; รอบ follow-up ไม่เปลี่ยน dependency graph, Auth/API/Schema/ledger/Secrets/Production bindings/Service Worker source และไม่เพิ่มบริการเสียเงิน Trial เปลี่ยน `today()` เป็น ISO แบบ fixed UTC+7 ขณะใช้ lazy EditorForm ไม่ช่วย จึงคืนเฉพาะ `src/lib/utils.ts` ตรงกับฐาน โดยคง lazy EditorForm ปัจจุบัน
+- Final unit **108 tests**, lint/typecheck/build **PASS**; build มี **179 public assets/33 routes**, SW **`4b2f777cb3774d13868d`**
+- Browser isolated local Worker/D1: CSS/fonts/navigation **32**, preload/auth guard **13**, Savings/planning/duplicate/concurrent/cross-couple **54**, PWA/receipts/offline/reopen **44**, layout **90 route/width combinations**, axe **30 states** ผ่าน; violations/runtime errors ใน normal journeys ที่ตรวจ 0 และ focus คืน **9/9** ไม่ใช่ผลโทรศัพท์จริงหรือ WCAG conformance ครบ
+- Lazy-form regression **PASS 22 checks** ครอบคลุม pending/cancel/focus/validation, expected asset/render failure, scoped error, offline/reload guard, receipt และ no financial POST แก้ synchronization/aria-hidden scope/diagnostic counting ใน harness โดยไม่ลด validation หรือสิทธิ์ของแอป ชุด browser นี้ไม่ได้ trigger busy runtime; busy guard ตรวจจาก source และ existing unit tests ในชุด 108 tests แยกต่างหาก
+- Actual PWA update จาก build `f5e4a6a` **PASS 8 checks**, SW `9926d5ec7b43e9cebc50` → `4b2f777cb3774d13868d`; cache ใหม่ครบ **179 assets/40 fonts**, ไม่มี private API และ pending receipt เดิมอยู่หลัง reload
+
+| Final cold mobile lab บน localhost | LCP ทั้ง 3 รอบ ms | TBT ทั้ง 3 รอบ ms | Strict budget |
+| --- | --- | --- | --- |
+| Savings | 3,329.432 / 3,336.676 / 3,321.629 | 127.5 / 184 / 137 | **PASS 3/3** |
+| Quest | 3,350.929 / 3,333.321 / 3,393.231 | 155.5 / 191 / **250** | **FAIL 1/3** (TBT) |
+
+Lighthouse 13.5.0/Edge155, CPU4×/RTT150ms และงบเดิม Savings guard ใช้ครบทั้ง 3 reports ผ่าน ส่วน aggregate 6 reports **exit 1: PASS 5/6, FAIL 1/6** ไม่ตัดผล Quest ออกเพื่ออ้างว่าทั้งแอปผ่าน Savings median TBT **198→137 ms**, transfer สูงสุด **342,444→330,411 bytes**; median LCP **3,348.82→3,329.43 ms** ต่างประมาณ19ms ยังไม่พิสูจน์ LCP gain การคง lazy form อาศัยการเลื่อนงานที่ยังไม่ต้องใช้และผล Savings TBT ไม่อ้างว่าแก้ Production Savings 4,194.66ms สำเร็จ
+
+**สิ่งที่ยังต้องตรวจ:** Quest TBT, HTTPS candidate performance หลังได้รับอนุมัติ Deploy, field p75/INP และโทรศัพท์จริง **77 กรณี NOT TESTED** ข้อคงค้าง invitation quota/CSP/account recovery/storage migration เดิมไม่เปลี่ยน Production ยังคง version `7de9621e-3e9d-453b-9612-ef2ceda499a1` โดยยังไม่ Deploy หรือทำ remote mutations และไม่เพิ่มค่าใช้จ่าย
+
+ไฟล์เปลี่ยน follow-up: `src/components/shared.tsx`, `src/components/editor-form.tsx`, `scripts/browser-lazy-form.cjs`, `README.md`, `QA.md`, `docs/PHASE_6_1_READINESS_REPORT.md` หลักฐาน `output/savings-deps-guarded-*` เป็น ignored local output ไม่รวม QA credentials/build artifacts ใน Git
+
+## ประวัติ checkpoint `f5e4a6a`, 24 ตุลาคม 2026 — Dependency remediation / Savings performance
 
 สถานะ readiness ยัง **CONDITIONAL**; คำขอแก้ dependency และ LCP รอบนี้เป็น **Partial**: dependency gate ของ candidate ผ่านแล้ว แต่ยังไม่มีการแก้ LCP ที่พิสูจน์ผลดี และ mobile performance gate ยัง FAIL ฐานเปรียบเทียบรอบนี้คือ `e7e60e2` รายละเอียดทุก trial รวมที่คืนโค้ดอยู่ใน [QA.md](../QA.md)
 

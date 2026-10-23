@@ -1,6 +1,54 @@
 # Our Little World — ผลการตรวจสอบ
 
-## Phase 6.1 — แก้ Dependency และตรวจ Savings LCP วันที่ 24 ตุลาคม 2026
+## Phase 6.1 — Savings TBT follow-up หลัง `f5e4a6a`, 24 ตุลาคม 2026
+
+**ผล local Savings: PASS 3/3 reports ตามงบเดิม; ผลรวม Quest/Savings: FAIL 1/6 reports เพราะ Quest TBT** Readiness ยัง **CONDITIONAL** และ Production ยังไม่ได้ Deploy candidate นี้ ไม่อ้างว่าประเด็น Production Savings LCP 4,194.66 ms วันที่ 23 ต.ค. ถูกแก้แล้ว โทรศัพท์จริงยัง **77 กรณี NOT TESTED** ไม่มีการเปลี่ยน Auth/API/Schema/ledger/Secrets/Production bindings/Service Worker source หรือเพิ่มบริการเสียเงิน
+
+### การแก้ที่คงไว้และขอบเขตผลดี
+
+- แยก `EditorForm` จาก `src/components/shared.tsx` ไป `src/components/editor-form.tsx` แล้วใช้ lazy import เมื่อเปิด editor ลดการโหลด/ประมวลผล React Hook Form และ resolver ในหน้าเริ่มต้นที่ยังไม่เปิดฟอร์ม คง schema, field rendering, validation และ onSave เดิม
+- เพิ่มสถานะ **กำลังเปิดแบบฟอร์ม…** และ error boundary เฉพาะ editor เมื่อโหลด chunk/render ไม่สำเร็จ แสดง error แทนจอขาว ปุ่ม reload ต้องออนไลน์และไม่มีงานบันทึกค้าง โดยรักษา pending receipt เดิม ไม่ retry mutation อัตโนมัติ
+- การตัดสินใจมาจาก startup CPU profile และ TBT failure ของ checkpoint ก่อน ไม่ใช่ข้ออ้าง LCP gain: Savings median TBT **198 → 137 ms** และ transfer สูงสุด **342,444 → 330,411 bytes** ลด 12,033 bytes; median LCP **3,348.82 → 3,329.43 ms** ต่างประมาณ 19 ms ยังไม่พิสูจน์การลด LCP อย่างมีนัยสำคัญ
+- Startup CPU diagnostic ของ **ฐาน `f5e4a6a` ครั้งเดียวกัน** พบ sampled self time ของ `I`/module instantiation **157.28 ms** และ `today()` **69.57 ms** เป็นคนละฟังก์ชัน ไม่ใช่ค่าก่อน/หลัง ไม่มี post-candidate CPU profile ใช้ข้อมูลนี้ระบุตำแหน่งงานเริ่มต้นเท่านั้น ไม่ใช้แทน Lighthouse TBT/LCP หรือผลเครื่องจริง
+- Trial เปลี่ยน `today()` เป็น ISO แบบ fixed UTC+7 **ขณะที่ใช้ lazy EditorForm อยู่แล้ว** ได้ LCP 3,385.024 / 3,351.641 / 3,348.412 ms, TBT 182 / 195 / 151 ms ไม่แสดงผลดีที่ควรคงไว้ จึงคืนเฉพาะ `src/lib/utils.ts` ตรงกับ HEAD ของฐาน `f5e4a6a` และคง lazy EditorForm ปัจจุบันไว้ การแยก EditorForm รอบนี้ต่างจาก lazy Sheet trial ก่อนหน้า ซึ่งยังคงเป็น trial ที่คืนโค้ดแล้ว
+- Dependency graph ไม่เปลี่ยนจาก `f5e4a6a`: คง Next/ESLint 16.4.3, npm guide/ignore-scripts และผล audit 0 ของ checkpoint นั้น ไม่อ้างว่ารัน dependency audit ใหม่จากการทดสอบ UI รอบนี้
+
+### ผลตรวจ candidate ที่มี loading/error guard สุดท้าย
+
+หลักฐานเป็น isolated local Worker/D1 และ browser QA ไม่ใช้บัญชีหรือ mutation บน Production Build สุดท้ายมี **179 public assets/33 routes**, Service Worker **`4b2f777cb3774d13868d`**
+
+| Check ที่รันจริง | ผล | หลักฐาน local ใน `output/` |
+| --- | --- | --- |
+| `npm test` | PASS **108 tests** | `savings-deps-guarded-tests.txt` |
+| `npm run lint` / `npm run typecheck` / `npm run build` | PASS รวม lint harness สุดท้าย | `savings-deps-guarded-{lint-final,typecheck,form-build,harness-lint-final}.txt` |
+| CSS/fonts/client navigation/nested reload | PASS **32 checks**, font responses 14, validated HTTP304 21, runtime errors 0 | `savings-deps-guarded-browser-css-navigation.txt` |
+| State preload/auth guard | PASS **13 checks** | `savings-deps-guarded-browser-state-preload.txt` |
+| Savings/history/reversal/planning/duplicate/concurrent/cross-couple | PASS **54 checks** | `savings-deps-guarded-browser-phase3.txt` |
+| PWA/receipts/response loss/reopen/offline/เงินและหัวใจไม่ซ้ำ | PASS **44 checks** | `savings-deps-guarded-browser-pwa.txt` |
+| Responsive layout / Accessibility | PASS **90 route/width combinations**; axe **30 states**, 0 violations, focus restored **9/9**, runtime errors 0 ตาม state ที่ตรวจ ไม่ใช่ WCAG conformance ครบ | `savings-deps-guarded-browser-{layout,accessibility}.txt` |
+| Lazy form loading/error regression | PASS **22 checks**: chunk โหลดเมื่อเปิด, ปิดระหว่างรอ/คืน focus, validation, expected asset/render failures, error เฉพาะฟอร์ม, offline/reload guard, receipt เดิมยังอยู่ และไม่มี financial POST จากกรณีที่ตรวจ | `savings-deps-guarded-browser-lazy-form-final.txt` |
+| Actual old→new PWA update | PASS **8 checks**, SW `9926d5ec7b43e9cebc50` → `4b2f777cb3774d13868d`; public cache ใหม่ครบ **179 assets/40 fonts**, ไม่มี API cache และ pending receipt เดิมอยู่หลัง reload | `savings-deps-guarded-update-old-ready.txt`, `savings-deps-guarded-browser-pwa-update.txt` |
+
+Lazy-form harness ระหว่างพัฒนาพบปัญหาในตัวทดสอบ: route-handler synchronization, query ที่ Radix ซ่อน background ด้วย aria-hidden และการนับ diagnostic จาก expected negative cases รวมกัน แก้การรอและ scope assertion ให้ตรวจ failure ของ editor โดยตรง คงข้อยืนยัน no financial POST, focus, error UI, offline/reload guards และ receipt ไม่ได้แก้ app validation/auth เพื่อให้ผ่าน Expected asset/render exceptions เป็นกรณีจำลองล้มเหลวที่ตั้งใจตรวจ ไม่ใช่ runtime error ที่เกิดขึ้นใน normal journeys ชุด browser 22 checks ไม่ได้ trigger busy runtime; busy guard ตรวจจาก source และ existing unit tests ที่อยู่ในผล 108 tests แยกจากหลักฐาน browser
+
+### Lighthouse สุดท้าย — คงงบเดิมและรายงานทุกหน้า
+
+Lighthouse **13.5.0**, Edge **155**, cold mobile simulation CPU **4×** / RTT **150 ms**, local origin และเงื่อนไขเดียวกับ checkpoint ก่อน วัดทีละหน้าโดยไม่รัน browser QA/build/tests พร้อมกัน ไม่ใช้ startup diagnostic แทนผลชุดนี้
+
+| หน้า | LCP ทั้ง 3 รอบ ms | Median LCP ms | Performance | TBT ทั้ง 3 รอบ ms | CLS สูงสุด | Transfer สูงสุด bytes | Strict budget |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Savings | 3,329.432 / 3,336.676 / 3,321.629 | 3,329.43 | 91 / 89 / 91 | 127.5 / 184 / 137 | 0.0008719445 | 330,411 | **PASS 3/3** |
+| Quest | 3,350.929 / 3,333.321 / 3,393.231 | 3,350.93 | 90 / 89 / 87 | 155.5 / 191 / **250** | 0.0003048344 | 327,570 | **FAIL 1/3** (TBT) |
+
+Accessibility 100 ทั้ง 6 reports งบยังเป็น Performance ≥85, Accessibility 100, LCP ≤4,000 ms, TBT ≤200 ms, CLS ≤0.1, transfer ≤500,000 bytes
+
+- Guard ของ **Savings ทั้ง 3 reports เดิม** PASS 3/3 (`savings-deps-guarded-savings-budget.txt`) ไม่ใช่การเลือกรอบดีที่สุดหรือทิ้งผล Quest
+- Guard รวม **Quest และ Savings ทั้ง 6 reports** **exit 1: PASS 5/6, FAIL 1/6** เพราะ Quest TBT 250 ms (`savings-deps-guarded-mobile-budget.txt`) ไม่อ้างว่า performance gate ของทั้งแอปผ่าน
+- Reports/traces: `savings-deps-guarded-{savings,quests}-{1,2,3}.json` และ trace/devtools logs ที่ชื่อเดียวกัน อยู่ใน ignored output ไม่รวมข้อมูลบัญชีหรือ generated build ใน Git
+
+**สิ่งที่ยังคงค้าง:** Quest TBT เกินงบหนึ่งรอบ, ประสิทธิภาพของ candidate บน Production ที่ยังไม่ได้ Deploy, field p75/INP และ iPhone/Android จริง ไม่เพิ่มบริการคิดเงินเพื่อวัดผลหรือเปลี่ยน cache/สิทธิ์เพื่อไล่คะแนน ข้อมูลผู้ใช้จริงและบริการ Cloudflare Free เดิมไม่เปลี่ยน
+
+## ประวัติ checkpoint `f5e4a6a` — แก้ Dependency และตรวจ Savings LCP วันที่ 24 ตุลาคม 2026
 
 สถานะรอบนี้ **Partial — dependency gate ผ่าน แต่ performance gate ยัง FAIL** เริ่มจากฐาน `e7e60e2` ยังไม่ Deploy และไม่ใช้ผล local แทน production รุ่นที่เผยแพร่อยู่ยังเป็น `7de9621e-3e9d-453b-9612-ef2ceda499a1` ไม่มีการเพิ่มบริการเสียเงิน เปลี่ยน Secrets, Production Bindings, Schema หรือ Authentication flow
 
