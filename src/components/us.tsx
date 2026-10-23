@@ -144,7 +144,7 @@ export function UsPage() {
           <div>
             <h3>การ์ดเตือนภายในแอป</h3>
             <p className="muted text-sm">
-              แสดงคำเตือนเมื่อมีนัดวันนี้ · ยังไม่มี Push Notification
+              แสดงคำเตือนเมื่อมีนัดวันนี้ · ตั้งค่าเฉพาะเครื่องนี้
             </p>
           </div>
           <button
