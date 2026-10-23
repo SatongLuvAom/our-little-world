@@ -1,4 +1,19 @@
-# 🔒 Security Audit Report: Our Little World — Phase 6.4
+# Security Audit: Our Little World
+
+## ผลล่าสุด — Phase 6.1 Mobile UAT, 23 ตุลาคม 2026
+
+อ่าน [รายงานปัจจุบัน](docs/PHASE_6_1_READINESS_REPORT.md#6-security-findings--dependency-reachability) สำหรับหลักฐานและขอบเขต สถานะ readiness เป็น **CONDITIONAL**; การแก้รอบนี้ยังไม่ได้ Deploy
+
+- `npm audit` **FAIL**: Critical 1 / High 5 ตาม dependency aggregation; `--omit=dev` พบ Next Critical 1 จึงไม่ใช้ผล zero-production-advisory ของวันที่ 16 ต.ค. แทนผลปัจจุบัน
+- Next 16.3.8 มี advisories ใหม่ ต้อง validate patched release ก่อนรับรอง dependency gate จาก static export/Worker bundle/production probes ยังไม่พบ Next server, image optimizer หรือ `use cache`/Server Actions attack path ตามเงื่อนไขที่ตรวจ นี่เป็น reachability assessment ไม่ใช่การแก้แพ็กเกจ
+- `braces` ในเครื่องมือ lint ยังมี upstream High advisory; ไม่พบใน Worker bundle พบข้อควรปรับเรื่อง invitation write quota (Medium) และ document CSP/framing (Low) จาก code/header inspection
+- Authorization, replay, expiry, concurrent/duplicate ledger และ cross-couple ผ่าน automated checks ที่ระบุในรายงาน แต่ iPhone/Android/OS Push เครื่องจริงยัง **NOT TESTED**
+
+ไม่ได้เปลี่ยน Auth flow/Schema/Secrets/Production bindings หรือเพิ่มบริการเสียเงิน ข้อเสนอ recovery/migration เป็นแบบออกแบบ ยังไม่ implement
+
+---
+
+## ประวัติ: Phase 6.4
 
 **วันที่ตรวจ:** 2026-10-16 (Asia/Bangkok)
 **Scope:** Auth, pairing, API ทุกกลุ่ม, D1 authorization/ledger/restore, private photos/letters, Push, PWA, dependency และไฟล์ที่เผยแพร่

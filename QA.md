@@ -1,5 +1,16 @@
 # Our Little World — ผลการตรวจสอบ
 
+## Phase 6.1 Mobile UAT — ตรวจล่าสุด 23 ตุลาคม 2026
+
+สถานะ **CONDITIONAL** — ดู [รายงานตรวจพร้อมหลักฐาน](docs/PHASE_6_1_READINESS_REPORT.md) และ [แบบทดสอบเครื่องจริง](docs/PHASE_6_1_MOBILE_UAT.md) ของฐาน `main` / `90f2c5a` เจ้าของอนุมัติให้นำงาน Phase 6.1 ขึ้น GitHub แล้ว โดยยังไม่ Deploy; Production ยังเป็นรุ่นก่อนหน้า
+
+- `npm test` ผ่าน **108 tests**; lint/typecheck/build, migrations 9 ไฟล์ใน QA D1 แยก, browser journeys และ layout 90 route/width combinations ผ่านตามขอบเขตในรายงาน
+- Lighthouse Production รอบใหม่: Quest ผ่าน 3/3, Savings ผ่าน 2/3; หนึ่งรอบ LCP **4,194.66 ms** เกินงบ 4,000 ms ทำให้ aggregate budget **FAIL** ไม่ใช้ผลผ่านวันที่ 18 ต.ค. แทนรอบนี้
+- `npm audit` **FAIL**: Next advisory ใหม่และ dev dependency advisory ดู reachability/ข้อจำกัดในรายงาน ไม่อ้างว่า production audit ยังเป็นศูนย์
+- iPhone/Android เครื่องจริง **77 กรณี NOT TESTED**; virtual Passkey/simulated Push ไม่ใช้แทนผลอุปกรณ์จริง ไม่มีการเพิ่ม paid service หรือเปลี่ยน Secrets/Production bindings/Schema/Auth flow
+
+หัวข้อวันที่ก่อนหน้านี้ด้านล่างเป็นประวัติของแต่ละรอบ ไม่ใช่ผลรับรองรอบปัจจุบัน
+
 ## Phase 6.6 — ลด LCP ของ Quest และ Savings
 
 ตรวจวันที่ 18 ตุลาคม 2026 (Asia/Bangkok) รุ่น HTTPS `7de9621e-3e9d-453b-9612-ef2ceda499a1`, Service Worker `0c6d00b0c0ce75c7c1f9` ใช้ Workers/D1/SQLite DO และ Cron เดิม ไม่มี migration, dependency, R2, Billing หรือแพ็กเกจเสียเงินเพิ่ม
