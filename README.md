@@ -6,11 +6,17 @@
 
 Phase 6.5 เพิ่ม Accessibility, งบประสิทธิภาพมือถือ และตัวนับข้อผิดพลาดที่ไม่เก็บเนื้อหาส่วนตัว ดูได้ที่ **Us → การทำงานของแอป → ดูสถานะแอป** ใช้ D1/Workers/DO เดิม ไม่มี SDK หรือบริการเสียเงินเพิ่ม วิธีตรวจและข้อจำกัดอยู่ใน [OPERATIONS.md](OPERATIONS.md) และผลที่รันจริงอยู่ใน [QA.md](QA.md)
 
-Phase 6.6 ลด LCP ของ Quest/Savings ผ่านงบ 4 วินาทีครบ 3 รอบต่อหน้าบน HTTPS โดยแยก route, ลด Zod exports และเริ่มอ่านบัญชีระหว่างโหลด JavaScript คงระบบตรวจสิทธิ์ เงิน/หัวใจ และ Cloudflare Free tier เดิม ดูผลก่อน–หลังและข้อจำกัดใน [QA.md](QA.md)
+ผล Phase 6.6 วันที่ 18 ต.ค. 2026 เคยผ่าน LCP 4 วินาทีครบ 3 รอบต่อหน้าบน HTTPS โดยแยก route, ลด Zod exports และเริ่มอ่านบัญชีระหว่างโหลด JavaScript ผลตรวจ Production วันที่ 23 ต.ค. พบ Savings เกินงบหนึ่งรอบ จึงไม่ใช้ผลเดิมแทนสถานะล่าสุด
+
+สถานะ 24 ต.ค. 2026: candidate อัปเดต Next/ESLint เป็น 16.4.3 และ dependency audit ผ่าน 0 vulnerabilities แต่ **ยังไม่ปิดงาน performance**: local Savings LCP ผ่าน 3/3 ขณะที่ TBT เกินงบหนึ่งรอบ การทดลองที่ไม่ช่วยถูกคืนโค้ดทั้งหมด ยังไม่ Deploy ไม่เปลี่ยน Cloudflare Free tier หรือเพิ่มบริการเสียเงิน ดูหลักฐานใน [QA.md](QA.md) และ [รายงาน Phase 6.1](docs/PHASE_6_1_READINESS_REPORT.md)
 
 ## เริ่มใช้งาน
 
 ต้องมี Node.js 22 ขึ้นไป และ npm ตามข้อกำหนดของ Wrangler (พัฒนาด้วย Node.js 24)
+
+ชุด dependency ปัจจุบันทดสอบด้วย Node.js 24.14.1 และ npm 11.11.0 ตาม `packageManager`; metadata นี้ไม่ได้เปลี่ยน npm ในเครื่องให้อัตโนมัติ ใช้ `npm ci` แบบรวม dev/optional dependencies สำหรับ build และเครื่องมือทดสอบ
+
+`.npmrc` ปิด dependency lifecycle scripts ไว้ การเรียกคำสั่งโปรเจกต์โดยตรง เช่น `npm run setup:local`, `npm test` และ `npm run build` ยังทำงานตามปกติ ไม่ต้องเปิด `--ignore-scripts=false` หรือ rebuild dependencies ทั้งชุด ชุด native packages ที่ใช้ผ่านการตรวจจาก clean install โดยบล็อก scripts แล้ว
 
 ```powershell
 npm ci
@@ -254,6 +260,6 @@ npx --yes --package @playwright/cli playwright-cli -s=our-world run-code --filen
 
 **Browser suite ล้างข้อมูล Demo ใน browser session ที่ทดสอบ** ใช้ session สำหรับ QA แยกจาก session ที่เก็บข้อมูลของตัวเอง; Phase 1–5 suites ใช้ CDP Virtual Authenticator ทำ WebAuthn จริงใน Browser และสร้างบัญชี QA 4 บัญชี/2 คู่ต่อรอบ ต้องล้างเฉพาะ ID ที่ suite คืนให้เมื่อเสร็จ ภาพและผล QA เก็บใน `output/playwright/` ซึ่งไม่ commit เข้า Git การจำลองนี้ไม่ใช่การทดสอบ Windows Hello/Face ID บนอุปกรณ์จริง
 
-ณ วันที่พัฒนา `npm audit --omit=dev` ไม่พบช่องโหว่ ส่วน dev toolchain มี 5 รายการระดับ high จาก `eslint-config-next → fast-glob → micromatch → braces` รุ่นล่าสุดที่ตรวจยังไม่มี patch จึงไม่ได้ downgrade Next.js หรือปิด lint เพื่อซ่อนผล ต้องตรวจอีกครั้งก่อน deployment
+ผล dependency ของ candidate วันที่ 24 ต.ค. 2026: full/production `npm audit` ผ่าน 0 vulnerabilities หลังอัปเดต Next/ESLint 16.4.3 ส่วน advisory ของ `braces` ที่เคยทำให้ dev toolchain มี 5 High ถูก upstream ถอนวันที่ 23 ต.ค. ไม่ได้ downgrade Next.js หรือปิด lint เพื่อซ่อนผล ดูหลักฐานและขอบเขตที่ [SECURITY.md](SECURITY.md); ยังไม่ Deploy candidate นี้และต้องตรวจใหม่ก่อน release
 
 อ้างอิงการตั้งค่า: [Next.js installation](https://nextjs.org/docs/app/getting-started/installation), [shadcn/ui manual installation](https://ui.shadcn.com/docs/installation/manual)

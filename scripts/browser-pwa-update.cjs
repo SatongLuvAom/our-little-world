@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unused-expressions -- Playwright CLI evaluates this function expression. */
-// Local preview only: serve the built worker with a different QA cache version before running.
+// Local preview only: open the previous build first, then serve the new build before running.
 async (page) => {
   const origin = new URL(page.url()).origin;
   if (origin !== "http://localhost:3018")
@@ -9,6 +9,30 @@ async (page) => {
     if (!ok) throw Error(name);
     checks.push(name);
   };
+  const workerResponse = await page.request.get(origin + "/sw.js", {
+    headers: { "Cache-Control": "no-cache" },
+  });
+  if (workerResponse.status() !== 200) throw Error("New build worker is unavailable");
+  const workerSource = await workerResponse.text();
+  const cacheMatch = workerSource.match(/^const CACHE = ("[^"]+");$/m);
+  const filesMatch = workerSource.match(/^const FILES = (\[[^\n]+\]);$/m);
+  if (!cacheMatch || !filesMatch) throw Error("New build public manifest is missing");
+  const expectedCache = JSON.parse(cacheMatch[1]);
+  const expectedFiles = JSON.parse(filesMatch[1]);
+  const initial = await page.evaluate(async () => {
+    const reg = await navigator.serviceWorker.getRegistration();
+    return {
+      controlled: !!navigator.serviceWorker.controller,
+      active: reg?.active?.state,
+      caches: await caches.keys(),
+    };
+  });
+  const previousCaches = initial.caches.filter((key) => key.startsWith("olw-static-") && key !== expectedCache);
+  check(initial.controlled && initial.active === "activated" && previousCaches.length > 0,
+    "update starts from an active controller and a different previous public cache");
+  await page.locator(".loading-screen").waitFor({ state: "hidden" });
+  await page.getByRole("heading", { name: "เรื่องของเราสองคน", exact: true }).waitFor();
+  await page.getByText("กำลังตรวจสอบข้อมูลของบัญชี…", { exact: true }).waitFor({ state: "hidden" });
   const second = await page.context().newPage();
   try {
     await second.goto(origin + "/us");
@@ -78,12 +102,26 @@ async (page) => {
       ),
       "explicit update reload preserves the original pending financial receipt",
     );
-    check(
-      (await page.evaluate(() => caches.keys())).some((key) =>
-        key.endsWith("-qa-update"),
-      ),
-      "updated worker activates its complete public cache",
-    );
+    const publicCache = await page.evaluate(async ({ expectedCache, expectedFiles }) => {
+      if (!(await caches.keys()).includes(expectedCache)) return { complete: false, privatePaths: [] };
+      const current = await caches.open(expectedCache);
+      const paths = (await current.keys()).map((request) => new URL(request.url).pathname);
+      const fonts = expectedFiles.filter((path) => path.startsWith("/_next/static/media/") && /\.(woff2?|ttf|otf)$/.test(path));
+      const required = ["/savings.html", "/quests.html", ...fonts];
+      const responses = await Promise.all(required.map((path) => current.match(path)));
+      const privatePaths = [];
+      for (const key of await caches.keys())
+        for (const request of await (await caches.open(key)).keys())
+          if (new URL(request.url).pathname.startsWith("/api/")) privatePaths.push(request.url);
+      return {
+        complete: paths.length === expectedFiles.length && expectedFiles.every((path) => paths.includes(path)) && fonts.length > 0 && responses.every((response) => response?.status === 200),
+        privatePaths,
+        assets: paths.length,
+        fonts: fonts.length,
+      };
+    }, { expectedCache, expectedFiles });
+    check(publicCache.complete, "updated worker activates the new build's complete public cache including Savings, Quests and fonts");
+    check(publicCache.privatePaths.length === 0, "current and previous public caches contain no private API response");
     await page.context().setOffline(true);
     await page.reload();
     await page
@@ -104,7 +142,7 @@ async (page) => {
           .isDisabled()),
       "updated build cold-starts with a disconnected network and private writes disabled",
     );
-    return { passed: checks.length, checks };
+    return { passed: checks.length, checks, expectedCache, previousCaches, publicAssets: publicCache.assets, fontAssets: publicCache.fonts };
   } finally {
     await page.context().setOffline(false);
     await page.evaluate(() =>

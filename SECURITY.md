@@ -1,6 +1,33 @@
 # Security Audit: Our Little World
 
-## ผลล่าสุด — Phase 6.1 Mobile UAT, 23 ตุลาคม 2026
+## ผลล่าสุด — Dependency remediation candidate, 24 ตุลาคม 2026
+
+**ขอบเขต:** candidate ในเครื่องบน Windows, Node `24.14.1` / npm `11.11.0` เท่านั้น **ยังไม่ได้ Deploy** และไม่ได้ยืนยันว่า Production อัปเกรด dependency แล้ว ผล readiness รวมยังเป็น **CONDITIONAL** ตาม [รายงาน Phase 6.1](docs/PHASE_6_1_READINESS_REPORT.md)
+
+- อัปเกรดและ pin `next` / `eslint-config-next` จาก `16.3.8` เป็น `16.4.3` พร้อม lockfile โดยใช้ [release ทางการของ Next.js 16.4.3](https://github.com/vercel/next.js/releases/tag/v16.4.3) ซึ่งรวมแพตช์จาก [security release 16.4.1](https://github.com/vercel/next.js/releases/tag/v16.4.1)
+- เพิ่ม `.npmrc` ให้ `ignore-scripts=true` และระบุ `packageManager: npm@11.11.0` บล็อก dependency lifecycle scripts ทั้งหมด ตรวจ native packages ที่ใช้งานบนเครื่องนี้หลัง clean install แล้ว
+- `braces` advisory [GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) ถูก upstream ถอนเมื่อ **2026-10-23T12:53:02Z** โดยระบุว่าไม่เป็นช่องโหว่ที่โจมตีได้ในทางปฏิบัติ การหายไปของ High findings สายนี้จึงมาจากการถอน advisory ไม่ใช่การใช้ `npm audit fix --force`, override, ลด lint coverage หรือปิด audit
+
+| การตรวจ candidate ที่รันจริง | ผล | หลักฐาน local |
+| --- | --- | --- |
+| Final `npm ci --ignore-scripts` หลังถอน performance trials | **PASS** — clean frozen install สำเร็จ; SHA256 ของ lockfile ก่อน/หลัง `npm ci` ตรงกัน | `output/dependency-final-clean-ci.txt`, `output/dependency-final-lockfile-integrity.json` |
+| Final `npm audit --json` | **PASS** — 0 vulnerabilities ทุก severity | `output/dependency-final-audit.json` |
+| Final `npm audit --omit=dev --json` | **PASS** — 0 vulnerabilities ทุก severity | `output/dependency-final-audit-production.json` |
+| Final `npm audit signatures --json` | **PASS** — `invalid: []`, `missing: []` | `output/dependency-final-signatures.json` |
+| เทียบ resolved ESLint config ของ `src/app/savings/page.tsx` ก่อน/หลัง | **PASS** — 113 rules พร้อม severity/options เหมือนเดิมทั้งหมด | `output/dependency-eslint-before.json`, `output/dependency-eslint-after.json`, `output/dependency-eslint-comparison.json` |
+| Native smoke หลังบล็อก install scripts | **PASS** — esbuild transform, sharp PNG, unrs load, SWC load และ workerd version | `output/dependency-native-smoke.txt` |
+
+Final CI ครั้งแรกติด `EBUSY` ขณะที่ preview เปิดอยู่; ปิด preview แล้วรันซ้ำผ่านตามผลด้านบน เก็บ log ครั้งแรกใน `output/dependency-final-clean-ci-attempt1.txt` และเวอร์ชันสุดท้ายใน `output/dependency-final-runtime.json`
+
+หลักฐาน upstream ที่เก็บไว้คือ `output/dependency-next-16.4.3-release.json` และ `output/dependency-braces-advisory.json` ผล audit ครอบคลุม advisories ที่ฐานข้อมูลรู้จักในรอบตรวจนี้ ไม่ใช่การรับรองว่าไม่มีความเสี่ยงทุกประเภท
+
+**ข้อคงค้างเดิม:** invitation write quota (Medium), document CSP/framing (Low) และ iPhone/Android/OS Push เครื่องจริงที่ยัง **NOT TESTED** ยังไม่ได้แก้หรือรับรองผ่านจากการอัปเดต dependency นี้ ไม่ได้เปลี่ยน Auth flow/Schema/Secrets/Production bindings เพิ่มบริการ หรือเปิดแพ็กเกจเสียเงิน
+
+ส่วนถัดไปเก็บผลตามวันที่ตรวจเดิมไว้เป็นประวัติ; ตัวเลข dependency/advisory เก่าไม่ใช่ผลของ candidate ปัจจุบัน
+
+---
+
+## ประวัติ — Phase 6.1 Mobile UAT, 23 ตุลาคม 2026
 
 อ่าน [รายงานปัจจุบัน](docs/PHASE_6_1_READINESS_REPORT.md#6-security-findings--dependency-reachability) สำหรับหลักฐานและขอบเขต สถานะ readiness เป็น **CONDITIONAL**; การแก้รอบนี้ยังไม่ได้ Deploy
 

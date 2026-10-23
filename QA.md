@@ -1,6 +1,76 @@
 # Our Little World — ผลการตรวจสอบ
 
-## Phase 6.1 Mobile UAT — ตรวจล่าสุด 23 ตุลาคม 2026
+## Phase 6.1 — แก้ Dependency และตรวจ Savings LCP วันที่ 24 ตุลาคม 2026
+
+สถานะรอบนี้ **Partial — dependency gate ผ่าน แต่ performance gate ยัง FAIL** เริ่มจากฐาน `e7e60e2` ยังไม่ Deploy และไม่ใช้ผล local แทน production รุ่นที่เผยแพร่อยู่ยังเป็น `7de9621e-3e9d-453b-9612-ef2ceda499a1` ไม่มีการเพิ่มบริการเสียเงิน เปลี่ยน Secrets, Production Bindings, Schema หรือ Authentication flow
+
+### สิ่งที่คงไว้ใน candidate
+
+- อัปเดต `next` และ `eslint-config-next` จาก `16.3.8` เป็น `16.4.3` พร้อม lockfile เพื่อแก้ dependency advisories คงเวอร์ชันนี้เพื่อความปลอดภัย **ไม่อ้างว่าเป็นการลด LCP**
+- เพิ่ม `.npmrc` ที่ตั้ง `ignore-scripts=true`, ระบุ `packageManager: npm@11.11.0` และแนวทางติดตั้งด้วย npm โดย explicit `npm run` ยังใช้ได้ ค่า `packageManager` ระบุรุ่นที่ใช้ ไม่ใช่หลักฐานว่าบังคับรุ่น npm ให้อัตโนมัติในทุกเครื่อง
+- เพิ่ม regression harness สำหรับ CSS/font ทั้ง cold load, client navigation และ nested reload; ปรับ PWA update harness ให้เริ่มจาก build เก่าจริงและตรวจ public cache ของ build ใหม่ รวมฟอนต์และการไม่เก็บ private API
+- คืนโค้ด performance trials ทุกข้อที่ไม่มีผลดีสม่ำเสมอ ไม่คงการเปลี่ยนฟอร์ม/dialog, font preload, Intl หรือ class merging จากการทดลองเหล่านั้น ไม่มีการเปลี่ยน business logic ของแอป
+
+### Savings LCP — บันทึกการทดลองที่ไม่เลือกคงไว้
+
+Lighthouse **13.5.0**, Edge **155** แบบ mobile cold load, simulated CPU **4×**, RTT **150 ms** และงบเดิม วัด local preview ทีละรอบ ชุดละ 3 ครั้ง ไม่คัดเฉพาะค่าต่ำสุด ค่าด้านล่างเป็น lab ของ local origin ไม่ใช่ HTTPS production หรือ field p75
+
+| ฐาน/การทดลอง | LCP ทั้ง 3 รอบ (ms) | Median (ms) | ผลและการตัดสินใจ |
+| --- | --- | --- | --- |
+| ฐานเดิม Next `16.3.8` | 3,370.067 / 3,312.686 / 3,306.319 | 3,312.69 | ฐานเปรียบเทียบ local; ไม่ใช้แทนผล production วันที่ 23 ต.ค. |
+| Dependency-only Next `16.4.3` | 3,402.584 / 3,324.970 / 3,332.133 | 3,332.13 | ช้ากว่าฐานประมาณ 19 ms; คง dependency update เพื่อความปลอดภัย ไม่ให้เครดิต LCP |
+| Inline CSS | 3,526.892 / 3,478.981 / 3,529.540 | 3,526.89 | แย่ลง; **คืนโค้ด** |
+| แยก QuestStatus | 3,352.164 / 3,327.244 / 3,319.577 | 3,327.24 | ต่างจาก dependency-only ประมาณ 5 ms อยู่ในความแปรปรวน; **คืนโค้ด** |
+| Lazy Sheet | 3,405.440 / 3,318.357 / 3,349.159 | 3,349.16 | ไม่ดีขึ้น; **คืนโค้ด** |
+| Preload Thai weight 600 หนึ่งไฟล์ | 3,447.421 / 3,370.732 / 3,377.589 | 3,377.59 | ไม่ดีขึ้น และ TBT หนึ่งรอบ **234 ms > 200 ms: FAIL**; **คืนโค้ด** |
+| Lazy Intl รอบแรก | 3,472.656 / 3,386.809 / 3,363.330 | 3,386.81 | ไม่ดีขึ้น และ TBT **209/217 ms > 200 ms: FAIL**; ตรวจซ้ำแบบ matched ก่อนตัดสิน |
+| Matched control ของ Lazy Intl | 3,399.414 / 3,362.495 / 3,361.795 | 3,362.49 | ฐานของ matched rerun โดยคง Intl เดิม |
+| Lazy Intl matched rerun | 3,785.842 / 3,354.090 / 3,335.465 | 3,354.09 | Median ต่างเพียงประมาณ 8 ms และมีรอบช้าขึ้นชัดเจน; **คืนโค้ด** แม้ Node CPU microbenchmark จะเร็วขึ้น ไม่ใช้ microbenchmark แทน LCP |
+| ถอด Tailwind merge | 3,396.614 / 3,381.478 / 3,441.447 | 3,396.61 | ไม่ดีขึ้น และ TBT หนึ่งรอบ **251.35 ms > 200 ms: FAIL**; **คืนโค้ด** |
+
+ทุกชุดมี LCP local ต่ำกว่า 4,000 ms แต่บางชุดไม่ผ่านงบ TBT จึงไม่ใช้ LCP เพียงค่าเดียวอ้างว่า mobile budget ผ่าน งบยังเป็น Performance ≥85, Accessibility 100, LCP ≤4,000 ms, TBT ≤200 ms, CLS ≤0.1, transfer ≤500,000 bytes
+
+**Savings production ยังไม่ปิดประเด็น LCP**: วันที่ 23 ต.ค. พบ LCP **4,194.66 ms** หนึ่งรอบและ aggregate budget FAIL การที่ candidate ในเครื่องต่ำกว่า 4 วินาทีไม่พิสูจน์ว่าแก้สาเหตุบน production แล้ว และไม่มี deployment รอบนี้เพื่อวัดผล candidate บน production ไม่อ้างว่าเพิ่มประสิทธิภาพสำเร็จจากความแปรปรวนของการทดสอบ
+
+### ผลตรวจ candidate สุดท้าย
+
+| Check ที่รันจริง | ผล | หลักฐาน local ใน `output/` |
+| --- | --- | --- |
+| Final `npm ci --ignore-scripts` / lockfile SHA256 | PASS — 479 packages, 46s; lockfile ก่อน/หลังตรงกัน | `dependency-final-clean-ci.txt`, `dependency-final-lockfile-integrity.json` |
+| Full / production `npm audit` และ `npm audit signatures` | PASS — 0 vulnerabilities; `invalid: []`, `missing: []` | `dependency-final-{audit,audit-production,signatures}.json` |
+| `npm test` | PASS **108 tests**, 0 failed/skipped | `savings-deps-final-tests.txt` |
+| `npm run lint` / `npm run typecheck` | PASS; lint harness ซ้ำหลังแก้ HTTP304 แล้ว | `savings-deps-final-{lint,typecheck,harness-lint}.txt` |
+| `npm run build` | PASS — 20 pages, 17 RSC aliases, 177 public assets/33 routes; SW `9926d5ec7b43e9cebc50` | `savings-deps-final-build.txt` |
+| CSS/fonts/client navigation/nested reload | PASS **32 checks**, real font responses 14, validated HTTP304 20, runtime errors 0 | `savings-deps-browser-css-navigation-final.txt` |
+| State preload/auth guard | PASS **13 checks** | `savings-deps-browser-state-preload.txt` |
+| Savings/history/reversal/duplicate/concurrent/cross-couple/planning | PASS **54 checks** | `savings-deps-browser-phase3.txt` |
+| PWA/receipt/response loss/reopen/offline/no duplicate money or hearts/cross-couple | PASS **44 checks** | `savings-deps-browser-pwa.txt` |
+| Responsive layout | PASS **90 route/width combinations** ที่ 320/375/390/430/768/1024px, runtime errors 0 | `savings-deps-browser-layout.txt` |
+| Accessibility | PASS **30 states**, 0 axe violations/overflow, focus restored 9/9; ยังมี manual/incomplete checks ไม่อ้าง WCAG conformance ครบ | `savings-deps-browser-accessibility.txt` |
+| Actual old→new PWA update | PASS **8 checks**, SW `750e705ec30696964c67` → `9926d5ec7b43e9cebc50`, cache ใหม่ครบ 177 assets/40 fonts ไม่มี API; pending receipt เดิมอยู่หลัง reload | `savings-deps-update-old-ready.txt`, `savings-deps-browser-pwa-update.txt` |
+
+CSS harness รอบแรก FAIL เพราะถือ HTTP304 เป็น asset error ทั้งที่ไม่มี request failure; แก้ให้ยอมเฉพาะ script/stylesheet ที่ URL/resource type เดียวกันเคยตอบ 200 ใน fresh context รอบนั้นแล้ว คง font200/FontFace/computed styles/runtime guards เดิม ดู `savings-deps-browser-css-navigation-diagnostic.txt` ไม่ใช้การแก้ harness เป็นหลักฐานว่า LCP ดีขึ้น
+
+การเตรียม fixture เคยทำให้ build FAIL เพราะไฟล์สำเนา `output/savings-deps-intl-snapshot/utils.ts` ยังอยู่ใน TypeScript include หลังถอน trial dependency; เปลี่ยนนามสกุลสำเนาเป็น `.txt` แล้ว final build/typecheck ผ่าน ไม่แก้ compiler checks หรือ source เพื่อหลบ error (`savings-deps-cn-build.txt`, `savings-deps-cn-build-final.txt`)
+
+### Lighthouse สุดท้าย — dependency-only candidate
+
+วัดหลังปิด QA browser/tests/build แล้ว ด้วยวิธีเดิมและ cold cache ทุกครั้ง ไม่มี performance trial เหลือใน source
+
+| หน้า | LCP ทั้ง 3 รอบ ms | Median ms | Performance | TBT ทั้ง 3 รอบ ms | CLS สูงสุด | Transfer สูงสุด bytes | Strict budget |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Quest | 3,341.427 / 3,376.335 / 3,344.116 | 3,344.12 | 87–90 | 200 / **262** / 154.5 | 0.000312 | 339,167 | **FAIL 1/3** (TBT) |
+| Savings | 3,340.691 / 3,348.822 / 3,376.124 | 3,348.82 | 86–91 | 141 / 198 / **280.5** | 0.000079 | 342,444 | **FAIL 1/3** (TBT) |
+
+Accessibility 100 ทั้ง 6 reports; LCP ผ่าน 3/3 ทั้งสองหน้า แต่ `node scripts/check-mobile-budget.mjs` กับทั้ง 6 reports **exit 1 ตามจริง**: 4 reports ผ่าน/2 reports เกิน TBT 200 ms ไม่เปลี่ยนงบหรือรันเลือกเฉพาะรอบที่ผ่าน (`savings-deps-final-{quests,savings}-{1,2,3}.json`, `savings-deps-final-mobile-budget.txt`)
+
+เทียบ local baseline กับ final Savings median 3,312.69 → 3,348.82 ms ไม่พบ LCP gain ที่พิสูจน์ได้ คง Next update เพื่อแก้ advisories เท่านั้น ไม่อ้างว่าแก้ production performance สำเร็จ ก่อนเผยแพร่ซอร์สอ่าน deployment metadata แบบ read-only พบรุ่นเดิมวันที่ 18 ต.ค. ไม่มีการเรียก deploy/migration/เปลี่ยน binding; browser/preview ของ QA ปิดหลังตรวจแล้ว
+
+โทรศัพท์ iPhone/Android จริงยัง **77 กรณี NOT TESTED** ตาม [แบบ UAT](docs/PHASE_6_1_MOBILE_UAT.md); ไม่มี field p75/INP หรือผล hardware ใหม่ ต้องเก็บ CPU/network profile ของ Savings เพิ่มก่อนเลือกการแก้ LCP/TBT รอบถัดไป โดยยังไม่ Deploy ตามข้อกำหนด
+
+หัวข้อวันที่ก่อนหน้านี้ด้านล่างเป็นประวัติของแต่ละรอบ ไม่ใช่ผลรับรองรอบปัจจุบัน
+
+## ประวัติ Phase 6.1 Mobile UAT — ตรวจวันที่ 23 ตุลาคม 2026
 
 สถานะ **CONDITIONAL** — ดู [รายงานตรวจพร้อมหลักฐาน](docs/PHASE_6_1_READINESS_REPORT.md) และ [แบบทดสอบเครื่องจริง](docs/PHASE_6_1_MOBILE_UAT.md) ของฐาน `main` / `90f2c5a` เจ้าของอนุมัติให้นำงาน Phase 6.1 ขึ้น GitHub แล้ว โดยยังไม่ Deploy; Production ยังเป็นรุ่นก่อนหน้า
 

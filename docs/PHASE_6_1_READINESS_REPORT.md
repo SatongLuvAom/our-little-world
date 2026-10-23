@@ -1,5 +1,32 @@
 # Phase 6.1 — Mobile UAT & Production Readiness Report
 
+## Checkpoint 24 ตุลาคม 2026 — Dependency remediation / Savings performance
+
+สถานะ readiness ยัง **CONDITIONAL**; คำขอแก้ dependency และ LCP รอบนี้เป็น **Partial**: dependency gate ของ candidate ผ่านแล้ว แต่ยังไม่มีการแก้ LCP ที่พิสูจน์ผลดี และ mobile performance gate ยัง FAIL ฐานเปรียบเทียบรอบนี้คือ `e7e60e2` รายละเอียดทุก trial รวมที่คืนโค้ดอยู่ใน [QA.md](../QA.md)
+
+- อัปเดตและ pin `next` / `eslint-config-next` เป็น `16.4.3`, ระบุ npm `11.11.0`, ปิด dependency lifecycle scripts ผ่าน `.npmrc` และปรับคู่มือติดตั้ง ไม่เปลี่ยน Auth/API/Schema/ledger/Secrets/Production bindings/Service Worker source หรือเปิดบริการเสียเงิน
+- Final clean `npm ci --ignore-scripts` ผ่าน 479 packages; SHA256 lockfile ก่อน/หลังตรงกัน Full/production `npm audit` = **0 vulnerabilities**, signature audit `invalid: []`, `missing: []` ดูขอบเขตและการถอน braces advisory ของ upstream ใน [SECURITY.md](../SECURITY.md)
+- Final `npm test` **PASS 108 tests**, lint/typecheck/build **PASS**; build 20 pages, 17 RSC aliases, 177 public assets/33 routes, SW `9926d5ec7b43e9cebc50`
+- Browser บน isolated local Worker/D1: CSS/fonts/navigation **32**, preload/auth guard **13**, Savings/history/reversal/planning/duplicate/concurrency/cross-couple **54**, PWA/receipts/offline/reopen **44**, layout **90 route/width combinations** และ axe **30 states** ผ่าน; คืน focus 9/9, runtime errors/axe violations ที่ตรวจ 0 ผลนี้ไม่ใช่เครื่องจริงหรือ WCAG conformance ครบ
+- PWA update **PASS 8 checks** จาก build เก่าจริง SW `750e705ec30696964c67` ไป candidate `9926d5ec7b43e9cebc50`: waiting/multiple-window/form guards, original pending receipt หลัง reload, cache ครบ 177 assets/40 fonts, ไม่มี API cache และ cold offline ปิด private writes
+
+| Final mobile lab บน localhost | LCP ทั้ง 3 รอบ ms | TBT ทั้ง 3 รอบ ms | Strict budget |
+| --- | --- | --- | --- |
+| Quest | 3,341.427 / 3,376.335 / 3,344.116 | 200 / **262** / 154.5 | **FAIL 1/3** (TBT) |
+| Savings | 3,340.691 / 3,348.822 / 3,376.124 | 141 / 198 / **280.5** | **FAIL 1/3** (TBT) |
+
+Lighthouse 13.5.0/Edge155, cold mobile simulation CPU4×/RTT150ms, ไม่เปลี่ยนงบ: LCP≤4,000ms ผ่านทุก report แต่ strict guard ครบ 6 reports **exit 1** เพราะ TBT≤200ms เกินสองรอบ ไม่ใช้ผล CSS/PWA checks แทน performance gate Local Savings median ก่อน/หลัง 3,312.69→3,348.82ms ไม่ได้พิสูจน์ LCP gain
+
+**สิ่งที่ยังไม่ปิด:** Production Savings 4,194.66ms ที่พบวันที่ 23 ต.ค. ไม่ถือว่าถูกแก้จาก local result; คืนโค้ด inline CSS, QuestStatus split, lazy Sheet, font preload, Intl reuse และ class merging trials ทั้งหมดที่ไม่ช่วยอย่างสม่ำเสมอ Candidate คง dependency patch เพื่อความปลอดภัยเท่านั้น ไม่ลด validation/auth checks หรือเปลี่ยนการ cache เงิน/สิทธิ์เพื่อไล่คะแนน
+
+**ขอบเขตการส่งมอบ:** เจ้าของอนุมัติให้อัปเดต GitHub แต่ระบุว่าไม่ Deploy จึงไม่เผยแพร่ candidate สู่ Production, ไม่ทำ remote mutations หรือเปิด paid service อ่าน deployment metadata ก่อนเผยแพร่ซอร์สแบบ read-only ยังพบ deployment `326f7434-1585-41b1-bac4-c7168f68cc4a` / version `7de9621e-3e9d-453b-9612-ef2ceda499a1` จากวันที่ 18 ต.ค. โทรศัพท์จริง **77 กรณี NOT TESTED**, invitation quota/CSP/account recovery/storage migration เดิมยังไม่แก้ ขั้นถัดไปคือเก็บ CPU/network profile ของ Savings เพิ่มก่อนเลือกการแก้ performance; Deploy ยังคงต้องได้รับอนุมัติแยก
+
+ไฟล์เปลี่ยนรอบนี้: `.npmrc`, `package.json`, `package-lock.json`, `README.md`, `SECURITY.md`, `QA.md`, `docs/PHASE_6_1_READINESS_REPORT.md`, `scripts/browser-css-navigation.cjs`, `scripts/browser-pwa-update.cjs` หลักฐาน `output/dependency-final-*`, `output/savings-deps-final-*` และ `output/savings-deps-browser-*` อยู่ใน ignored local output ไม่รวม QA credentials หรือ generated build ใน Git
+
+---
+
+ส่วน 1–12 ด้านล่างเป็นผล audit เดิมวันที่ 23 ต.ค. เพื่อเก็บประวัติ ตัวเลข dependency เก่าไม่ใช่ผล candidate วันที่ 24 ต.ค. และตัวเลข Production เดิมไม่ใช่ผลของ candidate ที่ยังไม่ Deploy
+
 วันที่ตรวจ: **23 ตุลาคม 2026 (Asia/Bangkok)**
 
 ฐานโค้ด: `main` / `90f2c5a3ebda8442949adb813746ed65437879ac`
